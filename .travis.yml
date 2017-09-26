@@ -14,6 +14,7 @@ addons:
     - ubuntu-toolchain-r-test
     packages:
     - g++-5
+    - sshpass
 script:
 - npm test
 env:
