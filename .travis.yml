@@ -18,3 +18,8 @@ script:
 - npm test
 env:
   - CXX=g++-5
+after_success:
+  - cp . $TRAVIS_BRANCH
+  - tar -czf etlbuild.tgz $TRAVIS_BRANCH
+  - export SSHPASS=$DEPLOY_PASS
+  - sshpass -e scp -o stricthostkeychecking=no etlbuild.tgz $DEPLOY_USER@$DEPLOY_HOST:./
