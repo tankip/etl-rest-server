@@ -26,5 +26,5 @@ env:
   - CXX=g++-5
 after_success:
   - echo "BUILD IMAGE"
-  - docker build -t $DOCKER_IMAGE:$TRAVIS_BRANCH .
+  - docker build -t $DOCKER_IMAGE:$TRAVIS_BRANCH-$TRAVIS_COMMIT .
   - docker images
