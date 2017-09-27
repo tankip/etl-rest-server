@@ -31,3 +31,4 @@ after_success:
   - docker images
   - export SSHPASS=$DEPLOY_PASS
   - sshpass -e scp -o stricthostkeychecking=no $DOCKER_IMAGE-$TRAVIS_BRANCH.tar $DEPLOY_USER@$DEPLOY_HOST:/home/rtanui
+  - sshpass -e ssh -o stricthostkeychecking=no $DEPLOY_USER@$DEPLOY_HOST ./deploy-build.sh
