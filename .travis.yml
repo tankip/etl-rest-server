@@ -30,4 +30,4 @@ after_success:
   - docker save -o $DOCKER_IMAGE-$TRAVIS_BRANCH.tar $DOCKER_IMAGE/$TRAVIS_BRANCH
   - docker images
   - export SSHPASS=$DEPLOY_PASS
-  - sshpass -e scp -o stricthostkeychecking=no $DOCKER_IMAGE-$TRAVIS_BRANCH.tar $DEPLOY_USER@$DEPLOY_HOST:./home/rtanui
+  - sshpass -e scp -o stricthostkeychecking=no $DOCKER_IMAGE-$TRAVIS_BRANCH.tar $DEPLOY_USER@$DEPLOY_HOST:/home/rtanui
