@@ -31,4 +31,4 @@ after_success:
   - docker images
   - export SSHPASS=$DEPLOY_PASS
   - sshpass -e scp -o stricthostkeychecking=no etlbuild.tgz $DEPLOY_USER@$DEPLOY_HOST:./
-  - sshpass -e ssh -o stricthostkeychecking=no $DEPLOY_USER@$DEPLOY_HOST ./deploy-build.sh
+  - sshpass -e ssh -o stricthostkeychecking=no $DEPLOY_USER@$DEPLOY_HOST ./deploy.sh
