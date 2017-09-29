@@ -29,5 +29,5 @@ after_success:
   - docker build -t $DOCKER_IMAGE/$TRAVIS_BRANCH:$TRAVIS_BRANCH .
   - docker save > $DOCKER_IMAGE/$TRAVIS_BRANCH etlbuild.tar.gz
   - export SSHPASS=$DEPLOY_PASS
-  - sshpass -e scp -o stricthostkeychecking=no etlbuild.tar $DEPLOY_USER@$DEPLOY_HOST:./
+  - sshpass -e scp -o stricthostkeychecking=no etlbuild.tar.gz $DEPLOY_USER@$DEPLOY_HOST:./
   - sshpass -e ssh -o stricthostkeychecking=no $DEPLOY_USER@$DEPLOY_HOST ./deploy-etl.sh
