@@ -20,10 +20,13 @@ addons:
     packages:
     - g++-5
     - sshpass
+
 script:
 - npm test
+
 env:
   - CXX=g++-5
+  
 after_success:
   - echo "BUILD IMAGE"
   - docker build -t $DOCKER_IMAGE/test .
