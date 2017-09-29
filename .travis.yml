@@ -26,8 +26,8 @@ env:
   - CXX=g++-5
 after_success:
   - echo "BUILD IMAGE"
-  - docker build -t $DOCKER_IMAGE/$TRAVIS_BRANCH:$TRAVIS_BRANCH .
-  - docker save $DOCKER_IMAGE/$TRAVIS_BRANCH > etlbuild.tar.gz
+  - docker build -t $DOCKER_IMAGE/test .
+  - docker save $DOCKER_IMAGE/test > etlbuild.tar.gz
   - export SSHPASS=$DEPLOY_PASS
   - sshpass -e scp -o stricthostkeychecking=no etlbuild.tar.gz $DEPLOY_USER@$DEPLOY_HOST:./
   - sshpass -e ssh -o stricthostkeychecking=no $DEPLOY_USER@$DEPLOY_HOST ./deploy-etl.sh
