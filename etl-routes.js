@@ -1412,8 +1412,10 @@ module.exports = function () {
                                 .description("The end date to filter by"),
                             programUuids: Joi.string()
                                 .optional()
-                                .description("The program to filter by")
-
+                                .description("The program to filter by"),
+                            department: Joi.string()
+                                .optional()
+                                .description("The department to filter by")
                         }
                     }
                 }
@@ -1476,7 +1478,10 @@ module.exports = function () {
                                 .description("The program to filter by"),
                             limit: Joi.string()
                                 .optional()
-                                .description("The limit to indicate number of rows")
+                                .description("The limit to indicate number of rows"),
+                            department: Joi.string()
+                                .optional()
+                                .description("The department to filter by")
 
                         }
                     }
@@ -1535,7 +1540,7 @@ module.exports = function () {
                     auth: 'simple',
                     plugins: {},
                     handler: function (request, reply) {
-                        console.log('xxxxxxxxxxxx', request)
+                        // console.log('xxxxxxxxxxxx', request)
                         patientReferralDao.updatePatientReferralNotification(request.params['patientReferralId'], request.payload)
                             .then(function (updatedPatientReferral) {
                                 reply(updatedPatientReferral);
