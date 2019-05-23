@@ -70,6 +70,14 @@
                 "type": "LEFT",
                 "joinCondition": "next_drug_pickup.person_id = t2.person_id AND next_drug_pickup.encounter_datetime > t2.encounter_datetime"
             }
+        },
+        {
+            "table": "amrs.program",
+            "alias": "pr",
+            "join": {
+                "type": "INNER",
+                "joinCondition": "pr.program_id  = t2.program_id"
+            }
         }
     ],
     "columns": [
@@ -83,6 +91,11 @@
             "alias": "encounter_type",
             "column": "t2.encounter_type"
         },
+        {
+            "type": "simple_column",
+            "alias": "program",
+            "column": "pr.name"
+        }, 
         {
             "type": "simple_column",
             "alias": "d",

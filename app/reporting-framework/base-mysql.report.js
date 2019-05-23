@@ -133,7 +133,7 @@ export class BaseMysqlReport {
                         .then((sqlQuery) => {
                             // allow user to use 'null' as parameter values
                             sqlQuery = sqlQuery.replace(/\'null\'/g, "null");
-                            // console.log('Query: ', sqlQuery);
+                            console.log('Query: ', sqlQuery);
 
                             that.reportQuery = sqlQuery;
                             // run query

@@ -68,6 +68,7 @@ export class PatientlistMysqlReport extends BaseMysqlReport {
                                     .then((sqlQuery) => {
                                         //allow 'null' as parameter value
                                         sqlQuery=sqlQuery.replace(/\'null\'/g,"null");
+                                        console.log('sqlquery', sqlQuery);
                                         that.reportQuery = sqlQuery;
                                         // run query
 
