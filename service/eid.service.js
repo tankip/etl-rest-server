@@ -18,9 +18,12 @@ var
   , curl = require('curlrequest')
   , eidResultsSchema = require('../eid-lab-results');
 
+  var logger = etlLogger.logger(config.logging.eidPath + '/' + config.logging.eidFile);
+
 var definition = {
   getSynchronizedPatientLabResults: getSynchronizedPatientLabResults,
   getEIDTestResultsByPatientIdentifier: getEIDTestResultsByPatientIdentifier,
+  getPendingEIDTestResultsByPatientIdentifiers: getTimedPendingEIDTestResultsByPatientIdentifiers,
   saveEidSyncLog: saveEidSyncLog,
   updateEidSyncLog: updateEidSyncLog,
   getViralLoadTestResultsByPatientIdentifier: getViralLoadTestResultsByPatientIdentifier,
@@ -267,7 +270,7 @@ function getEidViralLoadResults(host, apiKey, startDate, endDate, page) {
 
     if (!moment(startDate).isValid()) {
       reject('Invalid start date supplied', startDate);
-    }
+    } 
 
     if (!moment(endDate).isValid()) {
       reject('Invalid end date supplied', endDate);
@@ -282,8 +285,10 @@ function getEidViralLoadResults(host, apiKey, startDate, endDate, page) {
     rp.getRequestPromise(resource.query, resource.uri)
       .then(function (response) {
         resolve(response);
+        console.log('Querying EID', host);
       })
       .catch(function (error) {
+        console.log('Error querying EID', host,  error);
         reject(error);
       });
 
@@ -401,7 +406,7 @@ function getSynchronizedPatientLabResults(patientUuId, locations) {
 
   return listReachableServers(locations)
     .then(function (reachable) {
-
+       console.log("REachable servers", reachable);
       return new Promise(function (resolve, reject) {
 
         Promise.reduce(reachable, function (previous, row) {
@@ -467,7 +472,7 @@ function _getSynchronizedPatientLabResults(server, patientUuId) {
         // console.log('conflicts', JSON.stringify(conflicts));
         fields[0].conflicts = JSON.stringify(conflicts);
       }
-
+      console.log("posting obs to AMRS", missingResult);
       return obsService.postAllObsToAMRS(missingResult, patientUuId);
     })
     .then(function (postResponse) {
@@ -496,7 +501,7 @@ function _getSynchronizedPatientLabResults(server, patientUuId) {
           err_msg = 'Unable to convert object into response content';
 
         //log error
-        etlLogger.logger(config.logging.eidPath + '/' + config.logging.eidFile).error('sync failure: %s', err.message);
+        logger.error('sync failure: %s', err.message);
 
         fields[0].status = 1;
         fields[0].message = err_msg.substring(0, 100);
@@ -521,13 +526,135 @@ function _getSynchronizedPatientLabResults(server, patientUuId) {
     });
 }
 
+function getTimedPendingEIDTestResultsByPatientIdentifiers(patientIdentifiers, referenceDate, server) {
+  return new Promise(function(resolveTestResults, rejectTestResults){
+    let counter = 1;
+    const wait = setInterval(abortOnLongWait, 1000);
+    function abortOnLongWait() {
+      if (counter > 30) {
+        clearInterval(wait);
+        resolveTestResults({
+          viralLoad: [],
+          pcr: [],
+          cd4Panel: []
+        });
+      }
+      // call EID on first counter
+      if(counter == 1) {
+        getPendingEIDTestResultsByPatientIdentifiers(patientIdentifiers, referenceDate, server).then(function(result){
+          clearInterval(wait);
+          resolveTestResults(result);
+        }).catch(function(err){
+          clearInterval(wait);
+          rejectTestResults(err);
+        });
+      }
+      counter++;
+    }
+  });
+}
+
+function getPendingEIDTestResultsByPatientIdentifiers(patientIdentifiers, referenceDate, server) {
+  
+  var pending = {
+    viralLoad: [],
+    pcr: [],
+    cd4Panel: []
+  };
+  
+  var conf = server;
+  
+  pending[server.name] = {};
+  var location_name = server.name;
+  
+  var logAndGetFilteredResults = function(results) {
+    //let _referenceDate = moment(referenceDate).format('DD-MMM-YYYY');
+    let complete = [];
+    let inprocess = [];
+    _.each(results, function (row) {
+      logger.info('viral load result: %s', JSON.stringify(row));
+      if (row && row.SampleStatus) {
+        if (['Completed', 'Rejected', 'Complete'].indexOf(row.SampleStatus) != -1) {
+          complete.push(row);
+        }
+        if ('Inprocess' === row.SampleStatus) {
+          inprocess.push(row);
+        }
+      }
+    });
+    // remove duplicate dates for complete and inprocess
+    let completeByDay = complete.length > 0 ?
+    _.uniq(complete, (result) => { return result.DateCollected; }) : [];
+    let inProcessByDay = inprocess.length > 0 ?
+    _.uniq(inprocess, (result) => { return result.DateCollected; }) : [];
+    
+    // check if we have a pending on same day as complete
+    let hasInprocessAndCompleteByDay = [];
+    if(completeByDay.length > 0 && inProcessByDay.length> 0){
+      hasInprocessAndCompleteByDay = _.filter(completeByDay, function (_row) {
+        return _row.DateCollected === _.last(inProcessByDay).DateCollected;
+      });
+    };
+    
+    return hasInprocessAndCompleteByDay.length === 0 ? inProcessByDay : [];
+  };
+  
+  return new Promise(function (resolve, reject) {
+    
+    getViralLoadTestResultsByPatientIdentifier(patientIdentifiers, conf.host, conf.generalApiKey)
+      .then(function (response) {
+        if (response.posts instanceof Array) {
+          let inProcessOnSameDay = logAndGetFilteredResults(response.posts);
+          pending.viralLoad = inProcessOnSameDay;
+        } else
+          pending[location_name].viralLoadErrorMsg = response;
+        
+        return getPcrTestResultsByPatientIdentifier(patientIdentifiers, conf.host, conf.generalApiKey);
+      }).then(function (response) {
+        
+        if (response.posts instanceof Array) {
+          let inProcessOnSameDay = logAndGetFilteredResults(response.posts);
+              pending.pcr = inProcessOnSameDay;
+        } else
+          pending[location_name].pcrErrorMsg = response;
+        
+        if (conf.loadCd4)
+          return getCd4TestResultsByPatientIdentifier(patientIdentifiers, conf.host, conf.cd4ApiKey);
+        else {
+          return new Promise(function (resolve, reject) {
+            resolve({
+              fetched: false,
+              posts: []
+            });
+          });
+        }
+      }).then(function (response) {
+        if (response.posts instanceof Array) {
+          let inProcessOnSameDay = logAndGetFilteredResults(response.posts);
+              pending.cd4Panel = inProcessOnSameDay;
+        } else
+          pending[location_name].cd4ErrorMsg = response;
+        
+        resolve(pending);
+      })
+      .catch(function (err) {
+        
+        reject({
+          message: err.message,
+          results: pending,
+          uuid: patientIdentifiers
+        });
+      });
+  });
+}
+
 function getEIDTestResultsByPatientIdentifier(patientIdentifier, server) {
 
   var results = {
     viralLoad: [],
     pcr: [],
     cd4Panel: []
-  }
+  };
 
   var conf = server;
 
@@ -541,8 +668,7 @@ function getEIDTestResultsByPatientIdentifier(patientIdentifier, server) {
 
         if (response.posts instanceof Array) {
           _.each(response.posts, function (row) {
-
-            etlLogger.logger(config.logging.eidPath + '/' + config.logging.eidFile).info('viral load result: %s', JSON.stringify(row));
+            logger.info('viral load result: %s', JSON.stringify(row));
 
             if (row && row.SampleStatus && ['Completed', 'Rejected', 'Complete'].indexOf(row.SampleStatus) != -1) {
               results.viralLoad.push(row);

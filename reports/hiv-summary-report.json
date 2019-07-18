@@ -27,15 +27,42 @@
             }
         ],
         "filters": [
-            {"expression":"t1.encounter_datetime >= ?", "parameter":"startDate"},
-            {"expression":"t1.encounter_datetime <= ?", "parameter":"endDate"},
-            {"expression":"t1.location_uuid in (?)", "parameter":"locationUuids"},
-            {"expression":"round(datediff(t1.encounter_datetime,t3.birthdate)/365) >= ?", "parameter":"startAge"},
-            {"expression":"round(datediff(t1.encounter_datetime,t3.birthdate)/365) <= ?", "parameter":"endAge"},
-            {"expression":"t3.gender in ?", "parameter":"gender"},
-            {"expression":"t1.is_clinical_encounter = 1", "processForce":true},
-            {"expression":"coalesce(t1.death_date, out_of_care) is null", "processForce":true},
-            {"expression":"(t1.next_clinical_datetime_hiv is null or next_clinical_datetime_hiv  >= ?)", "parameter":"endDate"}
+            {
+                "expression":"t1.encounter_datetime >= ?",
+                "parameter":"startDate"
+            },
+            {
+                "expression":"t1.encounter_datetime <= ?",
+                 "parameter":"endDate"
+            },
+            {
+                "expression":"t1.location_uuid in ?",
+                 "parameter":"locationUuids"
+            },
+            {
+                "expression":"round(datediff(t1.encounter_datetime,t3.birthdate)/365) >= ?",
+                 "parameter":"startAge"
+            },
+            {
+                "expression":"round(datediff(t1.encounter_datetime,t3.birthdate)/365) <= ?",
+                 "parameter":"endAge"
+            },
+            {
+                "expression":"t3.gender in ?",
+                 "parameter":"gender"
+            },
+            {
+                "expression":"t1.is_clinical_encounter = 1",
+                 "processForce":true
+            },
+            {
+                "expression":"coalesce(t1.death_date, out_of_care) is null",
+                 "processForce":true
+            },
+            {
+                "expression":"(t1.next_clinical_datetime_hiv is null or next_clinical_datetime_hiv  >= ?)", 
+                "parameter":"endDate"
+            }
 
         ],
         "groupClause":[
@@ -48,6 +75,21 @@
                 "label":"patients",
                 "expression":"patients",
                 "sql":"count(distinct t1.person_id)"
+            },
+            {
+                "label":"on_tdf_3tc_dtg",
+                "expression":"on_tdf_3tc_dtg",
+                "sql":"1"
+            },
+            {
+                "label":"on_tdf_3tc_efv_400",
+                "expression":"on_tdf_3tc_efv_400",
+                "sql":"1"
+            },
+            {
+                "label":"on_tdf_3tc_efv_600",
+                "expression":"on_tdf_3tc_efv_600",
+                "sql":"1"
             },
             {
                 "label":"on_arvs",
@@ -173,19 +215,19 @@
             {
                 "label":"viral_load_resulted_in_past_year",
                 "expression":"viral_load_resulted_in_past_year",
-                "sql": "count(distinct if($expression,t1.person_id,0))"
+                "sql": "count(distinct if($expression,t1.person_id,null))"
 
             },
             {
                 "label":"virally_suppressed_in_past_year",
                 "expression":"virally_suppressed_in_past_year",
-                "sql": "count(distinct if($expression,t1.person_id,0))"
+                "sql": "count(distinct if($expression,t1.person_id,null))"
 
             },
             {
                 "label":"not_virally_suppressed_in_past_year",
                 "expression":"not_virally_suppressed_in_past_year",
-                "sql": "count(distinct if($expression,t1.person_id,0))"
+                "sql": "count(distinct if($expression,t1.person_id,null))"
             },
             {
                 "label":"perc_virally_suppressed_in_past_year",
@@ -230,12 +272,47 @@
             {
                 "label":"on_arvs_gt_26_weeks",
                 "expression":"on_arvs_gt_26_weeks",
-                "sql": "count(distinct if($expression,t1.person_id,0))"
+                "sql": "count(distinct if($expression,t1.person_id,null))"
             },
             {
                 "label":"perc_on_arvs_gt_6_months",
                 "expression":"perc_on_arvs_gt_6_months",
                 "sql":"[on_arvs_gt_26_weeks]/[patients]"
+            },
+            {
+                "label":"transfer_in_patients",
+                "expression":"transfer_in_patients",
+                "sql": "count(distinct if($expression,t1.person_id,null))"
+
+            },
+            {
+                "label":"patients_with_vl_result",
+                "expression":"patients_with_vl_result",
+                "sql": "count(distinct if($expression,t1.person_id,null))"
+
+            },
+            {
+                "label":"vl_suppressed_patients",
+                "expression":"vl_suppressed_patients",
+                "sql": "count(distinct if($expression,t1.person_id,null))"
+
+            },
+            {
+                "label":"vl_unsuppressed_patients",
+                "expression":"vl_unsuppressed_patients",
+                "sql": "count(distinct if($expression,t1.person_id,null))"
+
+            },
+            {
+                "label":"early_scheduled_visits",
+                "expression":"early_scheduled_visits",
+                "sql": "count(distinct if($expression,t1.person_id,null))"
+
+            },
+            {
+                "label":"late_scheduled_visits",
+                "expression":"late_scheduled_visits",
+                "sql": "count(distinct if($expression,t1.person_id,null))"
             }
 
         ],

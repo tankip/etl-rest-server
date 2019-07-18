@@ -1,65 +1,85 @@
 var
-  db = require('../etl-db')
-  , Promise = require('bluebird')
-  , https = require('http')
-  , config = require('../conf/config')
-  , moment = require('moment')
-  , curl = require('curlrequest');
+  db = require('../etl-db'),
+  Promise = require('bluebird'),
+  https = require('http'),
+  config = require('../conf/config'),
+  moment = require('moment'),
+  curl = require('curlrequest');
 
 var Sync = {
 
   timeout: 3000,
 
+  nextSyncDateTime: moment().subtract(1, 'minute'),
+
   records_limit: 1,
 
   processing: false,
 
-  start: function() {
-
-    if(!config.eidSyncCredentials) {
+  start: function () {
+    console.log('Starting EID sync');
+    if (!config.eidSyncCredentials) {
       console.log('openmrs sync user credentials should be provided');
       process.exit(1);
     }
 
     if (config.etl.tls) {
-        https = require('https');
+      https = require('https');
     }
 
     // load records from sync queue
-    setInterval(function() {
+    setInterval(function () {
 
-      if(!Sync.processing)
+      if (!Sync.processing)
         Sync.process();
-    },  Sync.timeout);
+    }, Sync.timeout);
   },
 
-  process: function() {
+  process: function () {
 
     var today = new Date().getHours();
 
     //sync records after working hours only
-    if (today >= 7 && today <= 17) {
+    // if (today >= 7 && today <= 17) {
+    //   Sync.processing = false;
+    //   return;
+    // }
+
+    // incase of server unavailability, postpone sync    
+    if (moment().isBefore(Sync.nextSyncDateTime)) {
+      console.log('Sync paused and will resume ' + Sync.nextSyncDateTime.fromNow());
+      console.log('Sync will resume at ' + Sync.nextSyncDateTime.format());
       Sync.processing = false;
       return;
     }
 
-    this.loadDbRecords()
-      .then(function(data) {
+    // if(!moment().isBefore(Sync.nextSyncDateTime)) {
+    //   console.log('simulating syncing at this point');
+    //   if(moment().minutes() >= 59){
+    //     console.log('simulating error');
+    //     Sync.nextSyncDateTime = moment().add(2, 'minute');
+    //   }
+    //   Sync.processing = false;
+    //   return;
+    // }
 
-        if(data.length > 0) {
+    this.loadDbRecords()
+      .then(function (data) {
+
+        if (data.length > 0) {
 
           Sync.processing = true;
 
           Sync.sync(data)
-            .then(function() {
+            .then(function () {
 
               return Sync.deleteProcessed(data);
             })
-            .then(function(deleted) {
+            .then(function (deleted) {
 
               Sync.process();
             })
-            .catch(function(err) {
+            .catch(function (err) {
 
               Sync.processing = false;
             });
@@ -70,7 +90,7 @@ var Sync = {
       });
   },
 
-  loadDbRecords: function() {
+  loadDbRecords: function () {
 
     var limit = Sync.records_limit;
 
@@ -79,20 +99,20 @@ var Sync = {
     var qObject = {
       query: sql,
       sqlParams: [limit]
-    }
+    };
 
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
       db.queryReportServer(qObject, function (data) {
         resolve(data.result);
       });
     });
   },
 
-  sync: function(data) {
+  sync: function (data) {
 
     var list = [];
 
-    for(var i = 0; i < data.length; i++) {
+    for (var i = 0; i < data.length; i++) {
 
       var row = data[i];
       list.push(Sync.syncSingleRecord(row.person_uuid));
@@ -101,7 +121,7 @@ var Sync = {
     return Promise.all(list);
   },
 
-  syncSingleRecord: function(patientUuId) {
+  syncSingleRecord: function (patientUuId) {
 
     console.log('syncing single record. ' + patientUuId);
 
@@ -119,21 +139,25 @@ var Sync = {
       }
     }
 
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
 
       curl.request(options, function (err, parts) {
 
         if (err) {
+          if (err === 'Failed to connect to host.') {
+            console.error('ETL Backend Service might be down.');
+            Sync.nextSyncDateTime = moment().add(10, 'minute');
+          }
 
+          console.log('error while syncing ' + patientUuId + '. Logging error.');
           Sync.logError(patientUuId, err)
-            .then(function() {
+            .then(function () {
               resolve('str');
             })
-            .catch(function(err) {
+            .catch(function (err) {
               resolve('str');
             });
         } else {
-
           console.log('syncing single record done. ' + patientUuId);
           resolve('str');
         }
@@ -142,25 +166,31 @@ var Sync = {
     });
   },
 
-  logError: function(patientUuId, error) {
+  logError: function (patientUuId, error) {
+    var sql = "INSERT INTO etl.eid_sync_queue_errors(person_uuid, error, date_created)" +
+      " VALUES('" + patientUuId + "','" + error + "', NOW())";
 
-    var table = 'etl.eid_sync_queue_errors';
-    var fields = [
-      {
-        person_uuid: patientUuId,
-        error: error,
-        date_created: moment(new Date()).format('YYYY-MM-DDTHH:mm:ss.SSSZZ'),
-      }
-    ];
+    var queryObject = {
+      query: sql,
+      sqlParams: []
+    };
 
-    return db.saveRecord(table, fields);
+    return new Promise(function (resolve, reject) {
+      db.queryReportServer(queryObject, function (response) {
+        if (response.error) {
+          reject(response);
+        } else {
+          resolve(response);
+        }
+      });
+    });
   },
 
-  deleteProcessed: function(data) {
+  deleteProcessed: function (data) {
 
     var lst = [];
 
-    for(var i = 0; i < data.length; i++) {
+    for (var i = 0; i < data.length; i++) {
       var row = data[i];
       lst.push(row.person_uuid);
     }
@@ -172,12 +202,12 @@ var Sync = {
       sqlParams: [lst]
     }
 
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
       try {
         db.queryReportServer(qObject, function (result) {
           resolve(result);
         });
-      } catch(e) {
+      } catch (e) {
 
         //TODO - ignoring delete
         resolve(e);

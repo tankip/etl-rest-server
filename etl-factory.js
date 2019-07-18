@@ -4,21 +4,28 @@ var s = require("underscore.string");
 var walk = require('walk');
 var helpers = require('./etl-helpers');
 var indicatorHandlersDefinition = require('./etl-processors.js');
+var indicatorProcessor = require('./service/indicator-processor/indicator-processor.service');
 //Report Indicators Json Schema Path
 var indicatorsSchemaDefinition = require('./reports/indicators.json');
 var patientLevelIndicatorsSchema = require('./reports/patient-level.indicators.json');
-var disaggregationDictionary = require('./reports/dictionaries/disaggregation-dictionary.json');
 var patientLabOrderProperties = require('./patient-lab-orders.json');
 var reportList = [];
 //iterate the report folder picking  files satisfying  regex *report.json
 reportList.push.apply(reportList, require('./reports/hiv-summary-report.json'));
-reportList.push.apply(reportList, require('./reports/moh-731-report.json'));
+// MOH-731 Legacy
+reportList.push.apply(reportList, require('./reports/moh-731-legacy/moh-731-report.json'));
+reportList.push.apply(reportList, require('./reports/moh-731-legacy/moh-731-cohort-report.json'));
+reportList.push.apply(reportList, require('./reports/moh-731-legacy/moh-731-indicator-report.json'));
+
+// MOH-731 2017
+reportList.push.apply(reportList, require('./reports/moh-731-2017/moh-731-report.json'));
+reportList.push.apply(reportList, require('./reports/moh-731-2017/moh-731-cohort-report.json'));
+reportList.push.apply(reportList, require('./reports/moh-731-2017/moh-731-indicator-report.json'));
+
 reportList.push.apply(reportList, require('./reports/patient-register-report.json'));
 reportList.push.apply(reportList, require('./reports/clinic-calander-report-v2.json'));
 reportList.push.apply(reportList, require('./reports/daily-visits-appointment.report.json'));
 reportList.push.apply(reportList, require('./reports/clinical-reminder-report.json'));
-reportList.push.apply(reportList, require('./reports/moh-731-cohort-report.json'));
-reportList.push.apply(reportList, require('./reports/moh-731-indicator-report.json'));
 reportList.push.apply(reportList, require('./reports/dataentry-statistics.json'));
 reportList.push.apply(reportList, require('./reports/clinical-overview-visualization-report.json'));
 reportList.push.apply(reportList, require('./reports/hiv-summary-monthly-report.json'));
@@ -28,6 +35,13 @@ reportList.push.apply(reportList, require('./reports/labs-report.json'));
 reportList.push.apply(reportList, require('./reports/viral-load-monitoring-report.json'));
 reportList.push.apply(reportList, require('./reports/medical-history-report.json'));
 reportList.push.apply(reportList, require('./reports/clinic-lab-orders-report.json'));
+reportList.push.apply(reportList, require('./reports/patient-status-change-tracker-report.json'));
+reportList.push.apply(reportList, require('./reports/datasets/pep-dataset-report.json'));
+reportList.push.apply(reportList, require('./reports/patient-monthly-care-status.json'));
+reportList.push.apply(reportList, require('./reports/patient-daily-care-status.json'));
+reportList.push.apply(reportList, require('./reports/cohort-report.json'));
+reportList.push.apply(reportList, require('./reports/patient-care-cascade-report.json'));
+reportList.push.apply(reportList, require('./reports/patient-referral-report.json'));
 //etl-factory builds and generates queries dynamically in a generic way using indicator-schema and report-schema json files
 module.exports = function () {
     var reports = [];
@@ -41,35 +55,32 @@ module.exports = function () {
         singleReportToSql: singleReportToSql,
         resolveIndicators: resolveIndicators,
         buildPatientListReportExpression: buildPatientListReportExpression,
-        buildETLPatientLabOrdersExpression: buildETLPatientLabOrdersExpression
+        buildETLPatientLabOrdersExpression: buildETLPatientLabOrdersExpression,
+        indicatorsSchema: indicatorsSchema,
+        reports: reports
     };
 
     function initialize(_reports, _indicatorsSchema, _indicatorHandlers, _patientLevelIndicatorsSchema) {
         reports = _reports;
-        indicatorsSchema =[];
+        indicatorsSchema = [];
         indicatorsSchema.push.apply(indicatorsSchema, _indicatorsSchema);
         indicatorsSchema.push.apply(indicatorsSchema, _patientLevelIndicatorsSchema);
         indicatorHandlers = _indicatorHandlers;
-        // desegregate indicators
-        _.each(reports, function (report) {
-            _.each(report.indicators, function (reportIndicator) {
-                if (reportIndicator.disaggregation) {
-                    _.each(indicatorsSchema, function (indicator) {
-                        if (reportIndicator.disaggregation.indicator === indicator.name) {
-                            var disaggregation = disaggregationDictionary[reportIndicator.disaggregation.filter];
-                            if (disaggregation)
-                                indicatorsSchema.push({
-                                    name: reportIndicator.expression,
-                                    label: indicator.label + ' ' + disaggregation.label,
-                                    description: indicator.description + ', ' + disaggregation.description,
-                                    expression: indicator.expression + ' and ' + disaggregation.expression
-                                });
-                        }
-                    });
-                }
-            });
+        // disaggregation fixed indicators
+        indicatorProcessor.disaggregateFixedIndicators(reports, indicatorsSchema);
+        // remove duplicates
+        indicatorsSchema= _.uniq(indicatorsSchema, 'name');
+
+    }
+    function getExpression(){
+        var expression =s.replaceAll(filterOption.expression,filterOption.options);
+        _.each(report.disintegrationFilterOptions, function (filterOption) {
+
         });
     }
+
+
+
 
     function resolveIndicators(reportName, result, requestIndicators) {
         _.each(reports, function (report) {
@@ -97,7 +108,7 @@ module.exports = function () {
             _.each(queryParams.reportIndicator.split(','), function (indicatorName) {
                 if (indicator.name === indicatorName) {
                     if (indicator.expression !== '') {
-                        var indicatorExpression = replaceIndicatorParam(indicator.expression, queryParams);
+                        var indicatorExpression = indicatorProcessor.replaceIndicatorParam(indicator.expression, queryParams);
                         whereClause += '(' + indicatorExpression + ') or ';
                     }
                 }
@@ -182,11 +193,13 @@ module.exports = function () {
         } else {
             reportName = requestParams.reportName;
         }
+
         var queryParts;
         _.each(reports, function (report) {
 
             if (report.name === reportName) {
                 var nestedParts = '';
+                var tableName  = '';
                 if (report.table.dynamicDataset && report.table.dynamicDataset !== reportName) {
                     _buildQueryParts(requestParams, report.table.dynamicDataset, queryPartsArray);
                     //get the last item of the array
@@ -197,10 +210,16 @@ module.exports = function () {
                 } else {
                     nestedParts = undefined;
                 }
+
+                if(report.table['tableName'] === '@tableName'){
+                     tableName = requestParams.tableName;
+                } else{
+                     tableName = report.table['tableName'];
+                }
                 var queryParts = {
                     columns: indicatorsToColumns(report, requestParams.countBy, requestParams),
                     concatColumns: concatColumnsToColumns(report),
-                    table: report.table['schema'] + '.' + report.table['tableName'],
+                    table: report.table['schema'] + '.' + tableName,
                     alias: report.table['alias'],
                     indexExpression: report.table['indexExpression'] || null,
                     nestedParts: nestedParts,
@@ -233,53 +252,11 @@ module.exports = function () {
                 asc: (orderBy.order.toLowerCase() === "asc")
             });
         });
-        console.log('----------------------->returned order by', order)
         return order;
     }
 
 
-    function replaceIndicatorParam(_indicatorExpression, requestParam) {
-        var indicatorExpression = _indicatorExpression;
-        var result;
-
-        if (s.include(indicatorExpression, '@endDate')) {
-            if (requestParam.whereParams) {
-                var dateParam = _.find(requestParam.whereParams, function (param) {
-                    if (param.name === 'endDate') return param;
-                });
-
-                if (dateParam) {
-                    indicatorExpression = s.replaceAll(indicatorExpression, '@endDate', "'" + dateParam.value + "'");
-                }
-            }
-        }
-
-        if (s.include(indicatorExpression, '@startDate')) {
-            if (requestParam.whereParams) {
-                var dateParam = _.find(requestParam.whereParams, function (param) {
-                    if (param.name === 'startDate') return param;
-                });
-
-                if (dateParam) {
-                    indicatorExpression = s.replaceAll(indicatorExpression, '@startDate', "'" + dateParam.value + "'");
-                }
-            }
-        }
-
-        if (s.include(indicatorExpression, '@referenceDate')) {
-            if (requestParam.whereParams) {
-                var referenceParam = _.find(requestParam.whereParams, function (param) {
-                    if (param.name === 'referenceDate') return param;
-                });
-
-                if (referenceParam) {
-                    indicatorExpression = s.replaceAll(indicatorExpression, '@referenceDate', "'" + referenceParam.value + "'");
-                }
-            }
-        }
-
-        return indicatorExpression;
-    }
+  
 
     //converts a set of indicators into sql columns
     function indicatorsToColumns(report, countBy, requestParam) {
@@ -303,7 +280,7 @@ module.exports = function () {
                                 } else {
                                     var column = singleIndicator.sql + ' as ' + singleIndicator.label;
                                     //check if indicator expression has endDate and startDate parameters
-                                    var indicatorExpression = replaceIndicatorParam(indicator.expression, requestParam);
+                                    var indicatorExpression = indicatorProcessor.replaceIndicatorParam(indicator.expression, requestParam);
                                     column = column.replace('$expression', indicatorExpression);
                                     result.push(column);
                                 }
@@ -318,7 +295,7 @@ module.exports = function () {
                         } else {
                             var column = singleIndicator.sql + ' as ' + indicator.name;
                             //check if indicator expression has endDate and startDate parameters
-                            var indicatorExpression = replaceIndicatorParam(indicator.expression, requestParam);
+                            var indicatorExpression = indicatorProcessor.replaceIndicatorParam(indicator.expression, requestParam);
                             column = column.replace('$expression', indicatorExpression);
                             result.push(column);
                         }
@@ -326,14 +303,18 @@ module.exports = function () {
                 }
             });
         });
+        // add dynamically derived indicators
+        var dynamicIndicators = indicatorProcessor.disaggregateDynamicIndicators(report, indicatorsSchema, requestParam);
+        result.push.apply(result,dynamicIndicators);
         return result;
 
     }
 
     //converts set of derived indicators to sql columns
-    function processesDerivedIndicator(report, derivedIndicator, indicator, requestParam) {
+    function processesDerivedIndicator(report, derIndicator, indicator, requestParam) {
         var reg = /[\[\]']/g; //regex [] indicator
         var matches = [];
+        var derivedIndicator =  _.assign({},derIndicator);
         derivedIndicator.sql.replace(/\[(.*?)\]/g, function (g0, g1) {
             matches.push(g1);
         });
@@ -345,7 +326,7 @@ module.exports = function () {
                         if (indicator.name === indicatorKey) {
                             var column = singleIndicator.sql;
                             // console.log('Derived Indicator request param', requestParam);
-                            var indicatorExpression = replaceIndicatorParam(indicator.expression, requestParam);
+                            var indicatorExpression = indicatorProcessor.replaceIndicatorParam(indicator.expression, requestParam);
                             column = column.replace('$expression', indicatorExpression);
                             derivedIndicator.sql = derivedIndicator.sql.replace(indicatorKey, column);
                         }
@@ -425,7 +406,7 @@ module.exports = function () {
         var result = [];
         _.each(groupBy.split(','), function (by) {
             _.each(groupClauses, function (groupClause) {
-                if (groupClause["parameter"] === by) {
+                if (groupClause["parameter"] === by || groupClause["processForce"]) {
                     _.each(reportParams, function (reportParam) {
                         if (reportParam["name"] === groupClause["parameter"]) {
                             _.each(reportParam["defaultValue"], function (value) {
@@ -541,7 +522,7 @@ module.exports = function () {
                                     //result.push(processesDerivedIndicator(report, singleIndicator, indicator));
                                 } else {
                                     //check if indicator expression has endDate and startDate parameters
-                                    var indicatorExpression = replaceIndicatorParam(indicator.expression, requestParam);
+                                    var indicatorExpression = indicatorProcessor.replaceIndicatorParam(indicator.expression, requestParam);
                                     result += '(' + indicatorExpression + ') or ';
                                 }
                             }
@@ -685,8 +666,9 @@ module.exports = function () {
         };
     }
 
-    function breakDownDerivedIndicator(reportIndicator) {
+    function breakDownDerivedIndicator(ri) {
         var matches = [];
+        var reportIndicator =  _.assign({},ri);
         reportIndicator.sql.replace(/\[(.*?)\]/g, function (g0, g1) {
             matches.push(g1);
         });
@@ -745,6 +727,56 @@ module.exports = function () {
         };
     }
 
+    function getReportDataSet(queryParams) {
+        var reportName = queryParams.reportName;
+        var extraPatientListColumns = [
+            'case when (timestampdiff(day,t1.vl_order_date,now()) between 0 and 14) and (t1.vl_1_date is null or t1.vl_order_date > t1.vl_1_date) then true else false end as has_pending_vl_test',
+            'date_format(t1.enrollment_date,"%d-%m-%Y") as enrollment_date',
+            'date_format(t1.hiv_start_date,"%d-%m-%Y") as hiv_start_date',
+            't1.arv_start_location',
+            'date_format(t1.arv_first_regimen_start_date,"%d-%m-%Y") as arv_first_regimen_start_date',
+            'date_format(t1.arv_start_date,"%d-%m-%Y") as cur_regimen_arv_start_date',
+            't1.cur_arv_line',
+            't1.cur_arv_meds',
+            't1.arv_first_regimen',
+            't1.vl_1',
+            'date_format(t1.vl_1_date,"%d-%m-%Y") as vl_1_date',
+            'date_format(t1.rtc_date,"%d-%m-%Y") as rtc_date',
+            'date_format(t1.tb_prophylaxis_start_date,"%d-%m-%Y") as tb_prophylaxis_start_date',
+            'date_format(t1.pcp_prophylaxis_start_date,"%d-%m-%Y") as pcp_prophylaxis_start_date',
+            'date_format(t1.tb_tx_start_date,"%d-%m-%Y") as tb_tx_start_date',
+            't1.encounter_type',
+            'date_format(t1.encounter_datetime,"%d-%m-%Y") as encounter_datetime',
+            'date_format(t1.death_date,"%d-%m-%Y") as death_date',
+            't1.out_of_care',
+            't1.transfer_out',
+            't1.patient_care_status',
+            't1.prev_rtc_date',
+            't1.prev_encounter_datetime_hiv'
+        ];
+        var dataSets = getAllDatasets(queryParams.reportName, [queryParams.reportName]);
+        _.each(dataSets, function (dataSet) {
+            _.each(reports, function (report) {
+                if (report.name === dataSet) {
+                    _.each(report.indicators, function (singleIndicator) {
+                        _.each(queryParams.requestIndicators.split(','), function (requestIndicatorName) {
+                            if (singleIndicator.expression === requestIndicatorName) {
+                                // handle dates table
+                                if (report.patientListColumns) extraPatientListColumns = report.patientListColumns;
+                                if (report.table.tableName !== 'flat_hiv_summary') reportName = dataSet;
+                            }
+                        });
+
+                    });
+                }
+            });
+        });
+        return {
+            reportName: reportName,
+            extraPatientListColumns: extraPatientListColumns
+        };
+    }
+
     function buildPatientListReportExpression(queryParams) {
         var result = {
             whereClause: [],
@@ -752,6 +784,8 @@ module.exports = function () {
             queryParts: []
         };
         if (queryParams === null || queryParams === undefined) return "";
+        var reportDataSet = getReportDataSet(queryParams);
+        queryParams.reportName = reportDataSet.reportName;
         var filter = generatePatientListFilter(queryParams);
         result.whereClause.push(filter.query);
         result.whereClause.push.apply(result.whereClause, filter.params);
@@ -763,7 +797,7 @@ module.exports = function () {
                     schema: 'amrs',
                     tableName: 'person_name',
                     alias: 'person_name',
-                    joinExpression: 't1.person_id = person_name.person_id',
+                    joinExpression: 't1.person_id = person_name.person_id and (person_name.voided is null || person_name.voided = 0)',
                     joinType: 'INNER JOIN'
                 });
                 join.push({
@@ -784,17 +818,15 @@ module.exports = function () {
                 join = _.filter(join, function (j) {
                     return _.isUndefined(j.joinedQuerParts);
                 });
-
+                var columns = [
+                    't1.person_id', 't1.encounter_id', 't1.location_id', 't1.location_uuid', 't1.uuid as patient_uuid',
+                    'person.gender', 'person.birthdate', 'extract(year from (from_days(datediff(now(),person.birthdate)))) as age'
+                ];
+                columns.push.apply(columns, reportDataSet.extraPatientListColumns);
                 var schema = report.table['schema'] === '' ? 'etl' : report.table['schema'];
                 var tableName = report.table['tableName'] === '' ? 'flat_hiv_summary' : report.table['tableName'];
                 var queryParts = {
-                    columns: [
-                        't1.person_id', 't1.encounter_id', 't1.location_id', 't1.location_uuid', 't1.uuid as patient_uuid',
-                        'person.gender', 'person.birthdate', 'extract(year from (from_days(datediff(now(),person.birthdate)))) as age',
-                        'case when (timestampdiff(day,vl_order_date,now()) between 0 and 14) and (vl_1_date is null or vl_order_date > vl_1_date) then true else false end as has_pending_vl_test',
-                        't1.enrollment_date', 'hiv_start_date', 'arv_start_location', 'arv_first_regimen_start_date', 'arv_start_date as cur_regimen_arv_start_date', 'cur_arv_line',
-                        'vl_1', 'vl_1_date'
-                    ],
+                    columns: columns,
                     concatColumns: [
                         "concat(COALESCE(person_name.given_name,''),' ',COALESCE(person_name.middle_name,''),' ',COALESCE(person_name.family_name,'')) as person_name",
                         "group_concat(distinct id.identifier separator ', ') as identifiers",
@@ -807,7 +839,7 @@ module.exports = function () {
                     having: filtersToSql(queryParams.whereParams, report.parameters, report.having),
                     group: ['t1.person_id'],
                     order: [{
-                        column: 'encounter_datetime',
+                        column: 't1.encounter_datetime',
                         asc: false
                     }],
                     offset: queryParams.startIndex,

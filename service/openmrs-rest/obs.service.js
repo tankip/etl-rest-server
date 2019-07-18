@@ -1,7 +1,6 @@
 /*jshint -W003, -W097, -W117, -W026 */
 'use strict';
 var Promise = require('bluebird');
-var noteService = require('../../service/notes.service');
 var encounterService = require('../../service/openmrs-rest/encounter.js')
 var db = require('../../etl-db');
 var _ = require('underscore');
@@ -17,11 +16,12 @@ var moment = require('moment');
 var eidRestFormatter = require('../../eid-rest-formatter');
 module.exports = function () {
   function getRestResource(path) {
-    var link = "https://" + config.openmrs.host + ":" + config.openmrs.port + path;
+    var protocol = config.openmrs.https ? 'https' :'http';
+    var link = protocol + '://' + config.openmrs.host + ':' + config.openmrs.port + path;
     return link;
   }
   function getPatientIdentifiers(patientUuId) {
-    var uri = getRestResource('/amrs/ws/rest/v1/patient/' + patientUuId);
+    var uri = getRestResource('/' + config.openmrs.applicationName + '/ws/rest/v1/patient/' + patientUuId);
     var queryString = {
       v: 'full'
     };
@@ -61,7 +61,7 @@ module.exports = function () {
   }
   function getPatientTestObsByConceptUuId(conceptUuId, patientUuId) {
     var patientObs = [];
-    var uri = getRestResource('/amrs/ws/rest/v1/obs');
+    var uri = getRestResource('/' + config.openmrs.applicationName + '/ws/rest/v1/obs');
     var queryString = {
       patient: patientUuId,
       concept: conceptUuId,
@@ -83,7 +83,7 @@ module.exports = function () {
   function getAmrsPatientObsByDate(conceptUuId, patientUuId) {
     var todaysDate = moment(new Date()).format('YYYY-MM-DD');
     var patientObs = [];
-    var uri = getRestResource('/amrs/ws/rest/v1/obs');
+    var uri = getRestResource('/' + config.openmrs.applicationName + '/ws/rest/v1/obs');
     var queryString = {
       patient: patientUuId,
       concept: conceptUuId,
@@ -117,7 +117,9 @@ module.exports = function () {
         { "conceptId": 9238, "uuid": "457c741d-8f71-4829-b59d-594e0a618892" },
         { "conceptId": 1238, "uuid": "a89b5856-1350-11df-a1f1-0026b9348838" },
         { "conceptId": 856, "uuid": "a8982474-1350-11df-a1f1-0026b9348838" },
-        { "conceptId": 1030, "uuid": "a898fe80-1350-11df-a1f1-0026b9348838" }
+        { "conceptId": 1030, "uuid": "a898fe80-1350-11df-a1f1-0026b9348838" },
+        { "conceptId": 730, "uuid": "a8970a26-1350-11df-a1f1-0026b9348838" },
+        { "conceptId": 5497, "uuid": "a8a8bb18-1350-11df-a1f1-0026b9348838" }
       ]
     }
     var promiseArray = [];
@@ -148,7 +150,9 @@ module.exports = function () {
         { "conceptId": 9238, "uuid": "457c741d-8f71-4829-b59d-594e0a618892" },
         { "conceptId": 1238, "uuid": "a89b5856-1350-11df-a1f1-0026b9348838" },
         { "conceptId": 856, "uuid": "a8982474-1350-11df-a1f1-0026b9348838" },
-        { "conceptId": 1030, "uuid": "a898fe80-1350-11df-a1f1-0026b9348838" }
+        { "conceptId": 1030, "uuid": "a898fe80-1350-11df-a1f1-0026b9348838" },
+        { "conceptId": 730, "uuid": "a8970a26-1350-11df-a1f1-0026b9348838" },
+        { "conceptId": 5497, "uuid": "a8a8bb18-1350-11df-a1f1-0026b9348838" }
       ]
     }
     var promiseArray = [];
@@ -169,7 +173,7 @@ module.exports = function () {
     });
   }
   function postObsToAMRS(payload, patientUuId) {
-    var uri = getRestResource('/amrs/ws/rest/v1/obs');
+    var uri = getRestResource('/' + config.openmrs.applicationName + '/ws/rest/v1/obs');
     return new Promise(function (resolve, reject) {
       rp.postRequestPromise(payload, uri)
         .then(function (response) {

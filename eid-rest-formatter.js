@@ -15,7 +15,14 @@ module.exports = function () {
     return link;
   }
   function removeWhiteSpace(string) {
-    return string.replace(/\s+/g, '');
+    var whitePaceVar;
+    if(string === '' || string === null){
+         whitePaceVar = '';
+    }else{
+        whitePaceVar = string.replace(/\s+/g, '');
+    }
+    return whitePaceVar;
+
   }
   function checkStatusOfViralLoad(viralLoadPayload) {
     var status = 0;
@@ -24,6 +31,7 @@ module.exports = function () {
     if (_.isEmpty(viralLoadPayload)) return -1;
     var viralLoadResult = removeWhiteSpace(viralLoadPayload.FinalResult);
 
+
     if (_.isEmpty(viralLoadResult)) {
       return -1;
     }
@@ -31,12 +39,13 @@ module.exports = function () {
     if (hasNumbersOnly.test(viralLoadResult)) {
       status = 1;
     }
-    else if (hasLessThanSymbol.test(viralLoadResult)) {
+    else if (hasLessThanSymbol.test(viralLoadResult) || viralLoadPayload.FinalResult.trim()==='Target Not Detected') {
       status = 0;
     }
     else {
       status = 2;
     }
+    // console.log('ASSESSING EID RESULT ',status, viralLoadResult);
     return status;
   }
   function isViralLoadError(viralLoadPayload) {
@@ -193,7 +202,8 @@ module.exports = function () {
       person: patientUuId,
       obsDatetime: date,
       concept: "a8982474-1350-11df-a1f1-0026b9348838",
-      value: 0
+      value: 0,
+      comment: '[' + viralLoad.FinalResult + ']'
     };
 
     if (viralLoad['OrderNo'] && stringNotEmpty(viralLoad['OrderNo'])) {
@@ -238,6 +248,19 @@ module.exports = function () {
 
   }
 
+  function isValueEmpty(value){
+
+    if(value === '' || value === null || value.length === 0){
+
+        return true;
+
+    } else {
+
+        return false;
+    }
+
+  }
+
   function convertCD4PayloadTORestConsumableObs(CD4payload, patientUuId) {
     var date = moment(CD4payload.DateCollected).format();
     var body = {
@@ -249,32 +272,59 @@ module.exports = function () {
     if ("AVGCD3percentLymph" in CD4payload) {
       var conceptUuId = "a89c4220-1350-11df-a1f1-0026b9348838";
       var value = CD4payload.AVGCD3percentLymph;
-      var AVGCD3percentLymph = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
-      body.groupMembers.push(AVGCD3percentLymph);
+      let isPercentLymphEmpty = isValueEmpty(value);
+      if(isPercentLymphEmpty === false){
+
+        var AVGCD3percentLymph = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
+        body.groupMembers.push(AVGCD3percentLymph);
+
+       }
+
     }
     if ("AVGCD3AbsCnt" in CD4payload) {
       var conceptUuId = "a898fcd2-1350-11df-a1f1-0026b9348838";
       var value = CD4payload.AVGCD3AbsCnt;
-      var AVGCD3AbsCnt = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
-      body.groupMembers.push(AVGCD3AbsCnt);
+      let isAVGCD3AbsCntEmpty = isValueEmpty(value);
+      if(isAVGCD3AbsCntEmpty === false){
+        var AVGCD3AbsCnt = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
+        body.groupMembers.push(AVGCD3AbsCnt);
+
+      }
+
     }
     if ("AVGCD3CD4percentLymph" in CD4payload) {
       var conceptUuId = "a8970a26-1350-11df-a1f1-0026b9348838";
       var value = CD4payload.AVGCD3CD4percentLymph;
-      var AVGCD3CD4percentLymph = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
-      body.groupMembers.push(AVGCD3CD4percentLymph);
+      let isAVGCD3CD4percentLymphEmpty = isValueEmpty(value);
+      if(isAVGCD3CD4percentLymphEmpty === false){
+
+        var AVGCD3CD4percentLymph = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
+        body.groupMembers.push(AVGCD3CD4percentLymph);
+
+      }
     }
     if ("AVGCD3CD4AbsCnt" in CD4payload) {
       var conceptUuId = "a8a8bb18-1350-11df-a1f1-0026b9348838";
       var value = CD4payload.AVGCD3CD4AbsCnt;
-      var AVGCD3CD4AbsCnt = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
-      body.groupMembers.push(AVGCD3CD4AbsCnt);
+      let isAVGCD3CD4AbsCntEmpty = isValueEmpty(value);
+      if(isAVGCD3CD4AbsCntEmpty === false){
+
+        var AVGCD3CD4AbsCnt = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
+        body.groupMembers.push(AVGCD3CD4AbsCnt);
+
+      }
     }
     if ("CD45AbsCnt" in CD4payload) {
       var conceptUuId = "a89c4914-1350-11df-a1f1-0026b9348838";
       var value = CD4payload.CD45AbsCnt;
-      var CD45AbsCnt = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
-      body.groupMembers.push(CD45AbsCnt);
+      let isCD45AbsCntEmpty = isValueEmpty(value);
+      if(isCD45AbsCntEmpty === false){
+
+        var CD45AbsCnt = generateCD4PanelSingleObject(patientUuId, conceptUuId, value, date);
+        body.groupMembers.push(CD45AbsCnt);
+
+      }
+
     }
 
     if (CD4payload['OrderNo'] && stringNotEmpty(CD4payload['OrderNo'])) {
@@ -466,7 +516,7 @@ module.exports = function () {
     return payload;
   }
   function getOrderByOrderNumber(orderNo) {
-    var uri = getRestResource('/amrs/ws/rest/v1/order/' + orderNo);
+    var uri = getRestResource('/'+ config.openmrs.applicationName + '/ws/rest/v1/order/' + orderNo);
     var queryString = {
       v: 'full'
     }

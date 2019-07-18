@@ -5,7 +5,7 @@
       "schema": "etl",
       "tableName": "flat_hiv_summary",
       "alias": "t1",
-      "indexExpression": "FORCE INDEX (location_rtc)"
+      "indexExpression": "FORCE INDEX (location_id_rtc_date)"
     },
     "joins": [
       {
@@ -13,7 +13,7 @@
         "schema": "amrs",
         "tableName": "person_name",
         "alias": "t2",
-        "joinExpression": "t1.person_id  = t2.person_id"
+        "joinExpression": "t1.person_id  = t2.person_id and (t2.voided is null || t2.voided = 0)"
       },
       {
         "joinType": "INNER JOIN",
@@ -28,6 +28,20 @@
         "tableName": "person",
         "alias": "t4",
         "joinExpression": "t1.person_id  = t4.person_id"
+      },
+      {
+        "joinType": "INNER JOIN",
+        "schema": "amrs",
+        "tableName": "visit",
+        "alias": "t5",
+        "joinExpression": "t1.visit_id  = t5.visit_id"
+      },
+       {
+        "joinType": "INNER JOIN",
+        "schema": "etl",
+        "tableName": "program_visit_map",
+        "alias": "t6",
+        "joinExpression": "t5.visit_type_id  = t6.visit_type_id"
       }
     ],
     "parameters": [
@@ -40,6 +54,18 @@
       {
         "name": "locations",
         "defaultValue": []
+      },
+      {
+        "name": "encounterIds",
+        "defaultValue": [-1]
+      },
+      {
+        "name": "visitTypeIds",
+        "defaultValue": [-1]
+      },
+       {
+        "name": "programTypeIds",
+        "defaultValue": [-1]
       },
       {
         "name": "groupByPerson",
@@ -57,7 +83,7 @@
         "parameter": "startDate"
       },
       {
-        "expression": "t1.location_id in ?",
+        "expression": "t1.location_id in (?)",
         "parameter": "locations"
       },
       {
@@ -66,7 +92,23 @@
         "parameter": ""
       },
       {
-        "expression": "encounter_type != 99999",
+         "expression": "coalesce(t1.transfer_out) is null",
+         "processForce": true
+      },
+      {
+        "expression": "t1.encounter_type in ?",
+        "parameter": "encounterIds"
+      },
+      {
+        "expression": "t6.visit_type_id in ?",
+        "parameter": "visitTypeIds"
+      },
+      {
+        "expression": "t6.program_type_id in ?",
+        "parameter": "programTypeIds"
+      },
+      {
+        "expression": "t1.encounter_type != 99999",
         "processForce": true,
         "parameter": ""
       }
@@ -87,6 +129,11 @@
         "label": "uuid",
         "type": "single",
         "sql": "t1.uuid"
+      },
+      {
+        "label": "encounter_type",
+        "type": "single",
+        "sql": "t1.encounter_type"
       },
       {
         "label": "given_name",
@@ -117,6 +164,11 @@
         "label": "age",
         "type": "single",
         "sql": "extract(year from (from_days(datediff(now(),t4.birthdate))))"
+      },
+      {
+        "label": "program",
+        "type": "single",
+        "sql": "t6.program_type_id"
       }
     ]
   },
@@ -126,7 +178,7 @@
       "schema": "etl",
       "tableName": "flat_hiv_summary",
       "alias": "t1",
-      "indexExpression": "FORCE INDEX (location_rtc)"
+      "indexExpression": "FORCE INDEX (location_id_rtc_date)"
     },
     "joins": [
       {
@@ -134,7 +186,7 @@
         "schema": "amrs",
         "tableName": "person_name",
         "alias": "t2",
-        "joinExpression": "t1.person_id  = t2.person_id"
+        "joinExpression": "t1.person_id  = t2.person_id and (t2.voided is null || t2.voided = 0)"
       },
       {
         "joinType": "INNER JOIN",
@@ -149,6 +201,20 @@
         "tableName": "person",
         "alias": "t4",
         "joinExpression": "t1.person_id  = t4.person_id"
+      },
+      {
+        "joinType": "INNER JOIN",
+        "schema": "amrs",
+        "tableName": "visit",
+        "alias": "t5",
+        "joinExpression": "t1.visit_id  = t5.visit_id"
+      },
+       {
+        "joinType": "INNER JOIN",
+        "schema": "etl",
+        "tableName": "program_visit_map",
+        "alias": "t6",
+        "joinExpression": "t5.visit_type_id  = t6.visit_type_id"
       }
     ],
     "parameters": [
@@ -161,6 +227,18 @@
       {
         "name": "locations",
         "defaultValue": []
+      },
+      {
+        "name": "encounterIds",
+        "defaultValue": [-1]
+      },
+       {
+        "name": "visitTypeIds",
+        "defaultValue": [-1]
+      },
+       {
+        "name": "programTypeIds",
+        "defaultValue": [-1]
       },
       {
         "name": "groupByPerson",
@@ -178,8 +256,20 @@
         "parameter": "startDate"
       },
       {
-        "expression": "t1.location_id in ?",
+        "expression": "t1.location_id in (?)",
         "parameter": "locations"
+      },
+       {
+        "expression": "encounter_type in ?",
+        "parameter": "encounterIds"
+      },
+      {
+        "expression": "t6.visit_type_id in ?",
+        "parameter": "visitTypeIds"
+      },
+      {
+        "expression": "t6.program_type_id in ?",
+        "parameter": "programTypeIds"
       },
       {
         "expression": "coalesce(t1.death_date) is null",
@@ -205,6 +295,11 @@
         "sql": "t1.person_id"
       },
       {
+        "label": "encounter_type",
+        "type": "single",
+        "sql": "t1.encounter_type"
+      },
+      {
         "label": "uuid",
         "type": "single",
         "sql": "t1.uuid"
@@ -242,12 +337,70 @@
     ]
   },
   {
+    "name": "daily-has-not-returned-cohort",
+    "table": {
+      "schema": "etl",
+      "tableName": "flat_hiv_summary",
+      "alias": "t2"
+    },
+    "joins": [],
+    "parameters": [
+      {
+        "name": "startDate",
+        "defaultValue": [
+          "10-10-2015"
+        ]
+      },
+      {
+        "name": "locations",
+        "defaultValue": []
+      },
+      {
+        "name": "groupByPerson",
+        "defaultValue": [
+          {
+            "label": "person_id",
+            "expression": "person_id"
+          }
+        ]
+      }
+    ],
+    "filters": [
+      {
+        "expression": "rtc_date >= ?",
+        "parameter": "startDate"
+      },
+      {
+        "expression": "location_id in (?)",
+        "parameter": "locations"
+      }
+    ],
+    "groupClause": [
+      {
+        "parameter": "groupByPerson"
+      }
+    ],
+    "indicators": [],
+    "supplementColumns": [
+      {
+        "label": "person_id",
+        "type": "single",
+        "sql": "person_id"
+      },
+      {
+        "label": "max_rtc_date",
+        "type": "single",
+        "sql": "MAX(rtc_date)"
+      }
+    ]
+  },
+  {
     "name": "daily-has-not-returned",
     "table": {
       "schema": "etl",
       "tableName": "flat_hiv_summary",
       "alias": "t1",
-      "indexExpression": "FORCE INDEX (location_rtc)"
+      "indexExpression": "FORCE INDEX (location_id_rtc_date)"
     },
     "joins": [
       {
@@ -255,7 +408,14 @@
         "schema": "amrs",
         "tableName": "person_name",
         "alias": "t3",
-        "joinExpression": "t1.person_id  = t3.person_id"
+        "joinExpression": "t1.person_id  = t3.person_id and (t3.voided is null || t3.voided = 0)"
+      },
+       {
+        "joinType": "INNER JOIN",
+        "schema": "amrs",
+        "tableName": "encounter_type",
+        "alias": "t9",
+        "joinExpression": "t1.encounter_type  = t9.encounter_type_id"
       },
       {
         "joinType": "INNER JOIN",
@@ -270,6 +430,41 @@
         "tableName": "person",
         "alias": "t5",
         "joinExpression": "t1.person_id  = t5.person_id"
+      },
+      {
+        "joinType": "LEFT OUTER JOIN",
+        "schema": "amrs",
+        "tableName": "person_attribute",
+        "alias": "t6",
+        "joinExpression": "t1.person_id = t6.person_id AND t6.person_attribute_type_id = 10 AND t6.voided = 0"
+      },
+      {
+        "joinType": "INNER JOIN",
+        "schema": "",
+        "alias": "t7",
+        "joinExpression": "t1.person_id = t7.person_id",
+        "dynamicDataset": "daily-has-not-returned-cohort"
+      },
+      {
+        "joinType": "LEFT OUTER JOIN",
+        "schema": "etl",
+        "tableName": "flat_hiv_summary",
+        "alias": "t8",
+        "joinExpression": "t1.person_id = t8.person_id and t8.encounter_type =116 and t1.encounter_datetime < t8.encounter_datetime"
+      },
+      {
+        "joinType": "INNER JOIN",
+        "schema": "amrs",
+        "tableName": "visit",
+        "alias": "t10",
+        "joinExpression": "t1.visit_id  = t10.visit_id"
+      },
+       {
+        "joinType": "INNER JOIN",
+        "schema": "etl",
+        "tableName": "program_visit_map",
+        "alias": "t11",
+        "joinExpression": "t11.visit_type_id  = t10.visit_type_id"
       }
     ],
     "parameters": [
@@ -282,6 +477,18 @@
       {
         "name": "locations",
         "defaultValue": []
+      },
+      {
+        "name": "encounterIds",
+        "defaultValue": [-1]
+      },
+       {
+        "name": "visitTypeIds",
+        "defaultValue": [-1]
+      },
+       {
+        "name": "programTypeIds",
+        "defaultValue": [-1]
       },
       {
         "name": "groupByPerson",
@@ -299,13 +506,30 @@
         "parameter": "startDate"
       },
       {
-        "expression": "date(t1.rtc_date) < date(now())",
+        "expression": "DATE(max_rtc_date) < DATE(NOW())",
         "parameter": "",
         "processForce": true
       },
       {
-        "expression": "t1.location_id in ?",
+        "expression": "t1.rtc_date = max_rtc_date",
+        "parameter": "",
+        "processForce": true
+      },
+      {
+        "expression": "t1.location_id in (?)",
         "parameter": "locations"
+      },
+      {
+        "expression": "t1.encounter_type in ?",
+        "parameter": "encounterIds"
+      },
+      {
+        "expression": "t11.visit_type_id in ?",
+        "parameter": "visitTypeIds"
+      },
+      {
+        "expression": "t11.program_type_id in ?",
+        "parameter": "programTypeIds"
       },
       {
         "expression": "coalesce(t1.death_date) is null",
@@ -313,22 +537,22 @@
         "processForce": true
       },
       {
-        "expression": "transfer_out is null",
+        "expression": "t1.transfer_out IS NULL",
         "parameter": "",
         "processForce": true
       },
       {
-        "expression": "next_clinical_datetime_hiv is null",
+        "expression": "t1.next_clinical_datetime_hiv IS NULL",
         "parameter": "",
         "processForce": true
       },
       {
-        "expression": "(next_encounter_type_hiv!=116 or next_encounter_type_hiv is null)",
+        "expression": "t8.person_id is null",
         "processForce": true,
         "parameter": ""
       },
       {
-        "expression": "encounter_type != 116",
+        "expression": "t1.encounter_type !=116",
         "processForce": true,
         "parameter": ""
       }
@@ -346,6 +570,11 @@
         "sql": "t1.person_id"
       },
       {
+        "label": "name",
+        "type": "single",
+        "sql": "t9.name"
+      },
+      {
         "label": "uuid",
         "type": "single",
         "sql": "t1.uuid"
@@ -354,6 +583,16 @@
         "label": "encounter_id",
         "type": "single",
         "sql": "t1.encounter_id"
+      },
+      {
+        "label": "visit_id",
+        "type": "single",
+        "sql": "t1.visit_id"
+      },
+      {
+        "label": "encounter_type",
+        "type": "single",
+        "sql": "t1.encounter_type"
       },
       {
         "label": "given_name",
@@ -384,6 +623,11 @@
         "label": "age",
         "type": "single",
         "sql": "extract(year from (from_days(datediff(now(),t5.birthdate))))"
+      },
+      {
+        "label": "phone_number",
+        "type": "single",
+        "sql": "t6.value"
       }
     ]
   }

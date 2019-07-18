@@ -19,7 +19,7 @@
         "schema": "amrs",
         "tableName": "person_name",
         "alias": "t2",
-        "joinExpression": "t1.patient_id  = t2.person_id"
+        "joinExpression": "t1.patient_id  = t2.person_id and (t2.voided is null || t2.voided = 0)"
       },
       {
         "joinType": "LEFT OUTER JOIN",
@@ -35,7 +35,6 @@
         "alias": "t5",
         "joinExpression": "t1.patient_id = t5.person_id"
       },
-
       {
         "joinType": "LEFT OUTER JOIN",
         "schema": "amrs",
@@ -50,7 +49,6 @@
         "alias": "t7",
         "joinExpression": "t7.provider_id = t6.provider_id"
       },
-
       {
         "joinType": "LEFT OUTER JOIN",
         "schema": "amrs",
@@ -60,10 +58,17 @@
       },
       {
         "joinType": "LEFT OUTER JOIN",
+        "schema": "etl",
+        "tableName": "clinical_encounter_type_map",
+        "alias": "t13",
+        "joinExpression": "t9.encounter_type_id= t13.encounter_type"
+      },
+      {
+        "joinType": "LEFT OUTER JOIN",
         "schema": "amrs",
         "tableName": "person_name",
         "alias": "t8",
-        "joinExpression": "t7.person_id  = t8.person_id"
+        "joinExpression": "t7.person_id  = t8.person_id and (t8.voided is null || t8.voided = 0)"
       },
       {
         "joinType": "LEFT OUTER JOIN",
@@ -77,7 +82,7 @@
         "schema": "amrs",
         "tableName": "person_name",
         "alias": "t11",
-        "joinExpression": "t10.person_id  = t11.person_id"
+        "joinExpression": "t10.person_id  = t11.person_id and (t11.voided is null || t11.voided = 0)"
       },
       {
         "joinType": "LEFT OUTER JOIN",
@@ -86,9 +91,6 @@
         "alias": "t12",
         "joinExpression": "t1.location_id  = t12.location_id"
       }
-
-
-
     ],
     "parameters": [
       {
@@ -146,7 +148,6 @@
         "type": "single",
         "sql": "t1.visit_id"
       },
-
       {
         "label": "visit_start",
         "type": "single",
@@ -165,7 +166,7 @@
       {
         "label": "seen_by_clinician",
         "type": "single",
-        "sql": "case when t4.encounter_type in (1,2,3,4,14,17,105,106) then t4.encounter_datetime else null end"
+        "sql": "case when t13.is_clinical = 1 then t4.encounter_datetime else null end"
       },
       {
         "label": "visit_end",
@@ -187,7 +188,6 @@
         "type": "single",
         "sql": "t9.name"
       },
-
       {
         "label": "encounter_start",
         "type": "single",
@@ -238,7 +238,6 @@
         "type": "single",
         "sql": "t10.person_id"
       },
-
       {
         "label": "provider_given_name",
         "type": "single",
@@ -275,16 +274,15 @@
         "sql": "t11.family_name"
       },
       {
-        "label":"location",
-        "type":"single",
-        "sql":"t12.name"
+        "label": "location",
+        "type": "single",
+        "sql": "t12.name"
       },
       {
-        "label":"location_id",
-        "type":"single",
-        "sql":"t12.location_id"
+        "label": "location_id",
+        "type": "single",
+        "sql": "t12.location_id"
       }
-
     ],
     "indicatorHandlers": [
       {

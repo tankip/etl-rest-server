@@ -11,9 +11,31 @@
         + config.openmrs.port + '/' + appName;
 
     var serviceDefinition = {
+        getPatientByUuid: getPatientByUuid,
         getPatientByIdentifier: getPatientByIdentifier,
         getPatientUuidsByIdentifiers: getPatientUuidsByIdentifiers
     };
+
+    function getPatientByUuid(patientUuid, params) {
+        var endPoint = '/ws/rest/v1/patient/' + patientUuid;
+
+        var requestParam = {
+            v: params.rep || 'default'
+        };
+
+        var url = (params.openmrsBaseUrl || openmrsBase) + endPoint;
+
+        return new Promise(function (resolve, reject) {
+            requestConfig.getRequestPromise(requestParam, url)
+                .then(function (data) {
+                    resolve(data);
+                })
+                .catch(function (err) {
+                    reject(err);
+                });
+        });
+
+    }
 
     function getPatientByIdentifier(params) {
         var endPoint = '/ws/rest/v1/patient';
@@ -43,7 +65,9 @@
                 _getPatientUuidByIdentifier(identifier, baseUrl)
                     .then(function (value) {
                         console.error(identifier + ' ' + value.patientUuid + ' reduced to', results.length);
-                        results.push(value);
+                        if(value.patientUuid){
+                            results.push(value);
+                        }
                         resolve(results);
                     })
                     .catch(function (error) {

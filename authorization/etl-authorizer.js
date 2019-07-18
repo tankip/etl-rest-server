@@ -25,6 +25,7 @@ var reportPrivileges = {
     'clinical-patient-care-status-overview-report': [PRIVILEGES.canViewDataAnalytics],
     'MOH-731-report': [PRIVILEGES.canViewDataAnalytics],
     'MOH-731-allsites-report': [PRIVILEGES.canViewDataAnalytics],
+    'MOH-731-report-2017': [PRIVILEGES.canViewDataAnalytics],
     'patient-register-report': [PRIVILEGES.canViewPatient, PRIVILEGES.canViewDataAnalytics],
     'hiv-summary-report': [PRIVILEGES.canViewDataAnalytics],
     'clinic-comparator-report': [PRIVILEGES.canViewDataAnalytics],
@@ -33,7 +34,11 @@ var reportPrivileges = {
     'labs-report': [PRIVILEGES.canViewPatient, PRIVILEGES.canViewDataAnalytics],
     'viral-load-monitoring-report': [PRIVILEGES.canViewPatient, PRIVILEGES.canViewDataAnalytics],
     'medical-history-report': [PRIVILEGES.canViewPatient],
-    'clinic-lab-orders-report': [PRIVILEGES.canViewClinicDashBoard, PRIVILEGES.canViewPatient]
+    'clinic-lab-orders-report': [PRIVILEGES.canViewClinicDashBoard, PRIVILEGES.canViewPatient],
+    'patient-status-change-tracker-report':  [PRIVILEGES.canViewDataAnalytics],
+    'patient-care-cascade-report':  [PRIVILEGES.canViewDataAnalytics],
+    'cohort-report':  [PRIVILEGES.canViewPatient],
+    'patient-referral-report':  [PRIVILEGES.canViewDataAnalytics]
 };
 
 var SUPERUSER_ROLES = ['System Developer'];
@@ -77,8 +82,8 @@ authorizer.hasPrivilege = function (privilege) {
     if (authorizer.isSuperUser()) {
         return true;
     }
-    //console.log('Current user privileges: ', JSON.stringify(currentUserPrivileges));
-    //console.log('Looking for privilege: ', privilege);
+    console.log('Current user privileges: ', JSON.stringify(currentUserPrivileges));
+    console.log('Looking for privilege: ', privilege);
     if (currentUserPrivileges.indexOf(privilege) > -1) {
         return true;
     }

@@ -1,11 +1,10 @@
 sudo: required
 language: node_js
 node_js:
-- '6'
-- node
+- '10'
 before_install:
-  - echo 'Africa/Nairobi' | sudo tee /etc/timezone
-  - sudo dpkg-reconfigure --frontend noninteractive tzdata
+  - export TZ=Africa/Nairobi
+  - date
   - npm install -g node-gyp
   - cp $TRAVIS_BUILD_DIR/conf/config.example.json $TRAVIS_BUILD_DIR/conf/config.json
 addons:
@@ -16,5 +15,6 @@ addons:
     - g++-5
 script:
 - npm test
+- npm start
 env:
   - CXX=g++-5

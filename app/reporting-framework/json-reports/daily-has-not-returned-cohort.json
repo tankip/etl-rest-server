@@ -1,0 +1,72 @@
+{
+    "name": "dailyHasNotReturnedCohort",
+    "version": "1.0",
+    "tag": "",
+    "description": "",
+    "uses": [],
+    "sources": [
+        {
+            "table": "etl.flat_appointment",
+            "alias": "t2"
+        }
+    ],
+    "columns": [
+        {
+            "type": "simple_column",
+            "alias": "person_id",
+            "column": "t2.person_id"
+        },
+        {
+          "type": "simple_column",
+          "alias": "is_clinical",
+          "column": "t2.is_clinical"
+        },
+        {
+            "type": "simple_column",
+            "alias": "max_rtc_date",
+            "column": "MAX(rtc_date)"
+        },
+        {
+          "type": "simple_column",
+          "alias": "department_id",
+          "column": "department_id"
+        },
+        {
+            "type": "simple_column",
+            "alias": "next_clinical_encounter_datetime",
+            "column": "next_clinical_encounter_datetime"
+        }
+    ],
+    "filters": {
+        "conditionJoinOperator": "and",
+        "conditions": [
+            {
+                "filterType": "tableColumns",
+                "conditionExpression": "t2.rtc_date >= ?",
+                "parameterName": "startDate"
+            },
+            {
+              "filterType": "tableColumns",
+              "conditionExpression": "t2.rtc_date <= ?",
+              "parameterName": "endDate"
+            },
+            {
+                "filterType": "tableColumns",
+                "conditionExpression": "t2.location_id in (?)",
+                "parameterName": "locations"
+            },
+            {
+                "filterType": "tableColumns",
+                "conditionExpression": "t2.is_clinical = 1",
+                "parameterName": ""
+            }
+        ]
+    },
+    "groupBy": {
+        "groupParam": "groupByParam",
+        "columns": [
+            "person_id"
+        ],
+        "excludeParam": "excludeParam"
+    }
+}

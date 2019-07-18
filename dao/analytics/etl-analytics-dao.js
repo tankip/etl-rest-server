@@ -50,8 +50,10 @@ module.exports = function () {
             });
         },
         runReport: function runReport(reportParams) {
+            console.log('Report Params', reportParams);
             //build report
             var queryParts = reportFactory.singleReportToSql(reportParams);
+            console.log('Query Parts', queryParts);
             return new Promise(function (resolve, reject) {
                 db.reportQueryServer(queryParts, function (results) {
                     if (results.error) {
@@ -72,8 +74,8 @@ module.exports = function () {
             var startDate = request.query.startDate || new Date().toISOString().substring(0, 10);
             var endDate = request.query.endDate || new Date().toISOString().substring(0, 10);
             var providerUuid;
-            var creatorUuid;
-            if (request.query.creatorUuid) creatorUuid = request.query.creatorUuid;
+            // var creatorUuid;
+            // if (request.query.creatorUuid) creatorUuid = request.query.creatorUuid;
             if (request.query.providerUuid) providerUuid = request.query.providerUuid;
 
             var queryParams = {
@@ -81,7 +83,8 @@ module.exports = function () {
                 countBy: 'encounter', //this gives the ability to count by either person_id or encounter_id,
                 locations: request.query.locationIds,
                 encounterTypeIds: request.query.encounterTypeIds,
-                formIds: request.query.formIds
+                formIds: request.query.formIds,
+                creatoruuid: request.query.creatorUuid
             };
 
             var where = {};
@@ -93,6 +96,7 @@ module.exports = function () {
             //build query params
             if (!_.isUndefined(startDate)) startDate = startDate.split('T')[0];
             if (!_.isUndefined(endDate)) endDate = endDate.split('T')[0];
+            console.log('Where', where);
             var requestParams = {
                 reportName: reportName,
                 whereParams: [
@@ -118,7 +122,7 @@ module.exports = function () {
                     },
                     {
                         "name": "creatorUuid",
-                        "value": creatorUuid
+                        "value": where.creator
                     },
                     {
                         "name": "encounterTypeIds",
@@ -127,12 +131,18 @@ module.exports = function () {
                 ],
                 groupBy: request.query.groupBy || 'groupByEncounterTypeId',
                 offset: request.query.startIndex,
-                limit: request.query.limit
+                limit: request.query.limit || 1000000
             };
             //build report
             var queryParts = reportFactory.singleReportToSql(requestParams);
+            // console.log('Query Parts', queryParts);
             db.reportQueryServer(queryParts, function (results) {
-                callback(reportFactory.resolveIndicators(reportName, results));
+                var res = reportFactory.resolveIndicators(reportName, results);
+                _.each(res.result, (item) => {
+                    item.cur_meds = helpers.getARVNames(item.cur_meds);
+                });
+                callback(res);
+
             });
 
         },
@@ -268,6 +278,7 @@ module.exports = function () {
         getIdsByUuidAsyc: function getIdsByUuidAsyc(fullTableName, idColumnName, uuidColumnName, arrayOfUuids, callback) {
             var uuids = [];
             _.each(arrayOfUuids.split(','), function (uuid) {
+                console.log('Uuid', uuid);
                 uuids.push(uuid);
             });
 
@@ -319,13 +330,13 @@ module.exports = function () {
             if (!_.isUndefined(endDate)) endDate = endDate.split('T')[0];
 
             var whereClause = ["date(encounter_datetime) >= ? and date(encounter_datetime) <= ? " +
-            "and t1.location_uuid in ?", startDate, endDate, locations];
+                "and t1.location_uuid in ?", startDate, endDate, locations];
             console.log('here is the no of locations selected', request.query.locationUuids);
             if (request.query.locationUuids === undefined)
                 whereClause = ["date(encounter_datetime) >= ? and date(encounter_datetime) <= ?", startDate, endDate];
             var queryParts = {
                 columns: columns,
-                table: "etl.flat_hiv_summary",
+                table: "etl.flat_hiv_summary_v15b",
                 where: whereClause,
                 joins: [
                     ['amrs.location', 't2', 't1.location_uuid = t2.uuid'],
@@ -346,9 +357,11 @@ module.exports = function () {
             var endDate = requestParams.endDate || new Date().toISOString().substring(0, 10);
             var order = helpers.getSortOrder(requestParams.order);
             var reportName = requestParams.reportName || 'hiv-summary-report';
-            var locationUuids = requestParams.locationUuids;
-            var locationIds = requestParams.locations||'';
+            var locationIds = requestParams.locations || '';
+            var locationUuids = [];
+            var stateUuids = [];
             var locations = [];
+            var programUuids= [];
             var startAge = requestParams.startAge || 0;
             var endAge = requestParams.endAge || 150;
             var gender = (requestParams.gender || 'M,F').split(',');
@@ -356,6 +369,24 @@ module.exports = function () {
             _.each(locationIds.split(','), function (loc) {
                 locations.push(Number(loc));
             });
+
+            // format locationUuids
+            if (requestParams.locationUuids) {
+                _.each(requestParams.locationUuids.split(','), function (loc) {
+                    locationUuids.push(String(loc));
+                });
+            }
+            //format StateUuids
+            if (requestParams.stateUuids) {
+                _.each(requestParams.stateUuids.split(','), function (s) {
+                    stateUuids.push(String(s));
+                });
+            }
+            if (requestParams.programUuids) {
+                _.each(requestParams.programUuids.split(','), function (s) {
+                    programUuids.push(String(s));
+                });
+            }
 
             if (!_.isUndefined(startDate)) startDate = startDate.split('T')[0];
             if (!_.isUndefined(endDate)) endDate = endDate.split('T')[0];
@@ -386,7 +417,17 @@ module.exports = function () {
                 }, {
                     "name": "gender",
                     "value": gender
-                }],
+                },
+                {
+                    "name": "programUuids",
+                    "value": programUuids
+                },
+                {
+                    "name": "stateUuids",
+                    "value": stateUuids
+                }
+
+                ],
                 startIndex: requestParams.startIndex || 0,
                 limit: requestParams.limit || 300
             };
@@ -397,7 +438,7 @@ module.exports = function () {
                     db.reportQueryServer(queryParts, function (results) {
                         if (results.error) {
                             results.queryParts = queryParts;
-                            reject(results.toString());
+                            reject(results);
                         } else {
                             resolve(reportFactory.resolveIndicators(reportName, results));
                         }
@@ -406,7 +447,7 @@ module.exports = function () {
                     reject(Boom.badRequest('An error occurred while generating patient list, please check parameter and try again'));
                 }
             });
-        }
+        },
 
     };
 }();
